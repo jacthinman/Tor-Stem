@@ -83,7 +83,7 @@ def mock(target, mock_call):
   # Builtin functions need special care because the builtin_function_or_method
   # type lacks the normal '__dict__'.
   
-  if isinstance(target, BUILTIN_TYPE):
+  if target.__name__ in __builtin__.__dict__.keys():
     # check if we have already mocked this function
     target_function = target.__name__
     is_mocked = False
@@ -98,22 +98,49 @@ def mock(target, mock_call):
     setattr(__builtin__, target.__name__, mock_call)
     return
   
-  if "mock_id" in target.__dict__:
-    # we're overriding an already mocked function
-    mocking_id = target.__dict__["mock_id"]
-    target_module, target_function, _ = MOCK_STATE[mocking_id]
-  else:
-    # this is a new mocking, save the original state
-    mocking_id = MOCK_ID.next()
-    target_module = inspect.getmodule(target)
+  elif isinstance(target, BUILTIN_TYPE):
+    # check if we have already mocked this function
     target_function = target.__name__
-    MOCK_STATE[mocking_id] = (target_module, target_function, target)
+    is_mocked = False
+    
+    for module, function_name, _ in MOCK_STATE.values():
+      if module == __builtin__ and function_name == target_function:
+        is_mocked = True
+    
+    if is_mocked:
+      setattr(__builtin__, target.__name__, mock_call)
+      return
+    
+    else:
+      # this is a new mocking, save the original state
+      mocking_id = MOCK_ID.next()
+      target_module = inspect.getmodule(target)
+      target_function = target.__name__
+      MOCK_STATE[mocking_id] = (target_module, target_function, target)
+    
+    mock_wrapper = lambda *args: mock_call(*args)
+    mock_wrapper.__dict__["mock_id"] = mocking_id
+    
+    # mocks the function with this wrapper
+    target_module.__dict__[target_function] = mock_wrapper
   
-  mock_wrapper = lambda *args: mock_call(*args)
-  mock_wrapper.__dict__["mock_id"] = mocking_id
-  
-  # mocks the function with this wrapper
-  target_module.__dict__[target_function] = mock_wrapper
+  else:
+    if "mock_id" in target.__dict__:
+      # we're overriding an already mocked function
+      mocking_id = target.__dict__["mock_id"]
+      target_module, target_function, _ = MOCK_STATE[mocking_id]
+    else:
+      # this is a new mocking, save the original state
+      mocking_id = MOCK_ID.next()
+      target_module = inspect.getmodule(target)
+      target_function = target.__name__
+      MOCK_STATE[mocking_id] = (target_module, target_function, target)
+      
+    mock_wrapper = lambda *args: mock_call(*args)
+    mock_wrapper.__dict__["mock_id"] = mocking_id
+    
+    # mocks the function with this wrapper
+    target_module.__dict__[target_function] = mock_wrapper
 
 def mock_method(target_class, method_name, mock_call):
   """
