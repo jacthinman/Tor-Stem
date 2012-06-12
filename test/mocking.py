@@ -82,7 +82,8 @@ def mock(target, mock_call):
   
   # Builtin functions need special care because the builtin_function_or_method
   # type lacks the normal '__dict__'.
-  
+ 
+  # "True" Built-in functions. 
   if target.__name__ in __builtin__.__dict__.keys():
     # check if we have already mocked this function
     target_function = target.__name__
@@ -98,6 +99,8 @@ def mock(target, mock_call):
     setattr(__builtin__, target.__name__, mock_call)
     return
   
+  # At least some standard library functions have BUILTIN_TYPE, however
+  # these must be mocked as though they are user-defined functions.
   elif isinstance(target, BUILTIN_TYPE):
     # check if we have already mocked this function
     target_function = target.__name__
@@ -124,6 +127,7 @@ def mock(target, mock_call):
     # mocks the function with this wrapper
     target_module.__dict__[target_function] = mock_wrapper
   
+  # User-defined functions will be mocked here.
   else:
     if "mock_id" in target.__dict__:
       # we're overriding an already mocked function
