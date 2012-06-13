@@ -107,7 +107,7 @@ def mock(target, mock_call):
       # these must be mocked in a similar fashion to user-defined functions
       # since they're not in __builtin__.__dict__.
       
-      # This is a new mocking, save the original state. (see below)
+      # This is a new mocking, save the original state.
       pass
   
   elif "mock_id" in target.__dict__:
