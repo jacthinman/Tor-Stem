@@ -71,6 +71,7 @@ def support_with(obj):
   obj.__dict__["__enter__"] = return_value(obj)
   obj.__dict__["__exit__"] = no_op()
 
+
 def mock(target, mock_call):
   """
   Mocks the given function, saving the initial implementation so it can be
@@ -82,26 +83,8 @@ def mock(target, mock_call):
   
   # Builtin functions need special care because the builtin_function_or_method
   # type lacks the normal '__dict__'.
- 
-  # "True" Built-in functions. 
-  if target.__name__ in __builtin__.__dict__.keys():
-    # check if we have already mocked this function
-    target_function = target.__name__
-    is_mocked = False
-    
-    for module, function_name, _ in MOCK_STATE.values():
-      if module == __builtin__ and function_name == target_function:
-        is_mocked = True
-    
-    if not is_mocked:
-      MOCK_STATE[MOCK_ID.next()] = (__builtin__, target_function, target)
-    
-    setattr(__builtin__, target.__name__, mock_call)
-    return
   
-  # At least some standard library functions have BUILTIN_TYPE, however
-  # these must be mocked as though they are user-defined functions.
-  elif isinstance(target, BUILTIN_TYPE):
+  if isinstance(target, BUILTIN_TYPE):
     # check if we have already mocked this function
     target_function = target.__name__
     is_mocked = False
@@ -110,41 +93,43 @@ def mock(target, mock_call):
       if module == __builtin__ and function_name == target_function:
         is_mocked = True
     
-    if is_mocked:
+    if target.__name__ in __builtin__.__dict__.keys():
+      # "true" Built-in functions
+      
+      if not is_mocked:
+        MOCK_STATE[MOCK_ID.next()] = (__builtin__, target_function, target)
+      
       setattr(__builtin__, target.__name__, mock_call)
       return
     
     else:
-      # this is a new mocking, save the original state
-      mocking_id = MOCK_ID.next()
-      target_module = inspect.getmodule(target)
-      target_function = target.__name__
-      MOCK_STATE[mocking_id] = (target_module, target_function, target)
-    
-    mock_wrapper = lambda *args: mock_call(*args)
-    mock_wrapper.__dict__["mock_id"] = mocking_id
-    
-    # mocks the function with this wrapper
-    target_module.__dict__[target_function] = mock_wrapper
-  
-  # User-defined functions will be mocked here.
-  else:
-    if "mock_id" in target.__dict__:
-      # we're overriding an already mocked function
-      mocking_id = target.__dict__["mock_id"]
-      target_module, target_function, _ = MOCK_STATE[mocking_id]
-    else:
-      # this is a new mocking, save the original state
-      mocking_id = MOCK_ID.next()
-      target_module = inspect.getmodule(target)
-      target_function = target.__name__
-      MOCK_STATE[mocking_id] = (target_module, target_function, target)
+      # At least some standard library functions have BUILTIN_TYPE, however
+      # these must be mocked in a similar fashion to user-defined functions
+      # since they're not in __builtin__.__dict__.
       
-    mock_wrapper = lambda *args: mock_call(*args)
-    mock_wrapper.__dict__["mock_id"] = mocking_id
-    
-    # mocks the function with this wrapper
-    target_module.__dict__[target_function] = mock_wrapper
+      # This is a new mocking, save the original state. (see below)
+      pass
+  
+  elif "mock_id" in target.__dict__:
+    # we're overriding an already mocked function
+    is_mocked = True
+    mocking_id = target.__dict__["mock_id"]
+    target_module, target_function, _ = MOCK_STATE[mocking_id]
+  else:
+    # This is a new mocking, save the original state.
+    is_mocked = False
+  
+  if not is_mocked:
+    mocking_id = MOCK_ID.next()
+    target_module = inspect.getmodule(target)
+    target_function = target.__name__
+    MOCK_STATE[mocking_id] = (target_module, target_function, target)
+  
+  mock_wrapper = lambda *args: mock_call(*args)
+  mock_wrapper.__dict__["mock_id"] = mocking_id
+  
+  # mocks the function with this wrapper
+  target_module.__dict__[target_function] = mock_wrapper
 
 def mock_method(target_class, method_name, mock_call):
   """
@@ -258,4 +243,6 @@ def get_protocolinfo_response(**attributes):
     protocolinfo_response.__dict__[attr] = attributes[attr]
   
   return protocolinfo_response
+
+
 
