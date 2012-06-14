@@ -71,7 +71,6 @@ def support_with(obj):
   obj.__dict__["__enter__"] = return_value(obj)
   obj.__dict__["__exit__"] = no_op()
 
-
 def mock(target, mock_call):
   """
   Mocks the given function, saving the initial implementation so it can be
@@ -81,45 +80,12 @@ def mock(target, mock_call):
   :param functor mock_call: mocking to replace the function with
   """
   
-  # Builtin functions need special care because the builtin_function_or_method
-  # type lacks the normal '__dict__'.
-  
-  if isinstance(target, BUILTIN_TYPE):
-    # check if we have already mocked this function
-    target_function = target.__name__
-    is_mocked = False
-    
-    for module, function_name, _ in MOCK_STATE.values():
-      if module == __builtin__ and function_name == target_function:
-        is_mocked = True
-    
-    if target.__name__ in __builtin__.__dict__.keys():
-      # "true" Built-in functions
-      
-      if not is_mocked:
-        MOCK_STATE[MOCK_ID.next()] = (__builtin__, target_function, target)
-      
-      setattr(__builtin__, target.__name__, mock_call)
-      return
-    
-    else:
-      # At least some standard library functions have BUILTIN_TYPE, however
-      # these must be mocked in a similar fashion to user-defined functions
-      # since they're not in __builtin__.__dict__.
-      
-      # This is a new mocking, save the original state.
-      pass
-  
-  elif "mock_id" in target.__dict__:
+  if hasattr(target, "__dict__") and "mock_id" in target.__dict__:
     # we're overriding an already mocked function
-    is_mocked = True
     mocking_id = target.__dict__["mock_id"]
     target_module, target_function, _ = MOCK_STATE[mocking_id]
   else:
-    # This is a new mocking, save the original state.
-    is_mocked = False
-  
-  if not is_mocked:
+    # this is a new mocking, save the original state
     mocking_id = MOCK_ID.next()
     target_module = inspect.getmodule(target)
     target_function = target.__name__
@@ -129,7 +95,10 @@ def mock(target, mock_call):
   mock_wrapper.__dict__["mock_id"] = mocking_id
   
   # mocks the function with this wrapper
-  target_module.__dict__[target_function] = mock_wrapper
+  if hasattr(target, "__dict__"):
+    target_module.__dict__[target_function] = mock_wrapper
+  else:
+    setattr(target_module, target.__name__, mock_call)
 
 def mock_method(target_class, method_name, mock_call):
   """
